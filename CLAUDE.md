@@ -1,128 +1,138 @@
-# Causeway — Codebase Guide
+# Causeway — Claude Code Guide
 
-Read PLANNING.md first. Every design decision has a numbered entry (D1–D32)
-with a rationale. If you are about to change something that conflicts with a
-decision, re-read that entry before proceeding.
-
----
-
-## What this repository is
-
-Phase 1 of the Causeway citizen-dev platform. It contains three tightly
-coupled artefacts that prove the core agent loop:
-
-1. **Schema** — `schema/causeway-manifest.schema.json` — the single source of
-   truth for what a valid manifest looks like. Everything else derives from it.
-
-2. **Validator** — `validator/` — a Python CLI (`cwy validate`) that reads a
-   manifest and returns structured JSON output with meaningful exit codes.
-   This is what an agent calls in its write→validate→fix loop.
-
-3. **Scaffold** — `scaffold/` — a pre-filled `causeway.yaml` template that
-   passes validation out of the box, plus `AGENTS.md` (the universal agent
-   instruction file) and generated tool-specific rule files.
-
-Phase 1 does **not** include container builds, CI/CD pipelines, auth proxy,
-deployment, telemetry, or promotion machinery. Those are Phase 2+.
+**Read PLANNING.md first.** Every design decision has a numbered entry (D1–D32)
+with a rationale. Conflicts with those decisions need a new decision entry, not
+a unilateral change.
 
 ---
 
-## Repository structure
+## Quick orientation
+
+Phase 1 is complete. The repo contains a working JSON Schema, a CLI validator
+(`cwy validate`), a scaffold template, tests, and CI. Nothing else is built yet.
+See `.work/handoff.md` for the full state summary.
+
+```sh
+pip install -e ./validator pytest check-jsonschema  # first time only
+
+pytest tests/ -v                                    # run tests
+cwy validate scaffold/causeway.yaml --json          # smoke test the CLI
+python docs/generate.py                             # regenerate derived files
+check-jsonschema --check-metaschema schema/causeway-manifest.schema.json
+```
+
+---
+
+## Repo structure
 
 ```
 schema/
-  causeway-manifest.schema.json   ← THE source of truth — never generated
+  causeway-manifest.schema.json   ← THE source of truth. Never generated.
+
 scaffold/
   causeway.yaml                   ← pre-filled template; must pass cwy validate
-  AGENTS.md                       ← universal agent instructions — the source
-  .cursorrules                    ← GENERATED from AGENTS.md (do not edit)
+  AGENTS.md                       ← universal agent instructions; the source
+  .cursorrules                    ← GENERATED — do not edit
   .github/
-    copilot-instructions.md       ← GENERATED from AGENTS.md (do not edit)
+    copilot-instructions.md       ← GENERATED — do not edit
+
 validator/
-  pyproject.toml
+  pyproject.toml                  ← entry point: cwy = causeway.cli:main
   src/causeway/
-    cli.py                        ← click entry point: `cwy validate`
-    validate.py                   ← two-pass orchestration → ValidationResult
-    classify.py                   ← policy checks → denied errors
-    loader.py                     ← YAML parser
+    cli.py                        ← click group; cwy validate subcommand
+    validate.py                   ← two-pass orchestration, FieldError, ValidationResult
+    classify.py                   ← five policy checks → denied errors
+    loader.py                     ← YAML parser (strips yaml-language-server header)
     schema.py                     ← loads bundled schema; Draft202012Validator
     data/
-      causeway-manifest.schema.json  ← schema bundled with the package (copy)
+      causeway-manifest.schema.json  ← MANUAL COPY of schema/ — keep in sync
+
 docs/
-  generate.py                     ← generates manifest-reference.md + rule files
-  manifest-reference.md           ← GENERATED from schema (do not edit)
+  generate.py                     ← run after changing schema or AGENTS.md
+  manifest-reference.md           ← GENERATED — do not edit
+
 tests/
-  fixtures/                       ← YAML files for each error class
-  test_validate.py                ← pytest suite
+  fixtures/                       ← YAML files; one per error class
+  test_validate.py                ← 26 pytest cases
+
 .github/
-  workflows/
-    ci.yml                        ← four-job CI pipeline
+  workflows/ci.yml                ← four-job pipeline
+
+.work/
+  gotchas.md                      ← non-obvious traps discovered in Phase 1
+  handoff.md                      ← state summary for the next agent
 ```
-
-### Generation dependency chain
-
-```
-schema/causeway-manifest.schema.json
-  └─ docs/generate.py ──► docs/manifest-reference.md
-scaffold/AGENTS.md
-  └─ docs/generate.py ──► scaffold/.cursorrules
-                      └─► scaffold/.github/copilot-instructions.md
-
-schema/ ──► validator/src/causeway/data/  (manual copy — keep in sync)
-```
-
-**Never hand-edit a generated file.** Edit the source and run
-`python docs/generate.py`.
 
 ---
 
-## Key rules
+## Rules that must not be broken
 
-- **Schema is source of truth.** Field names, enums, and constraints in the
-  schema take precedence over anything else. If docs or validator logic
-  disagrees with the schema, the schema wins and the other artefact must be
-  updated.
+**Schema is source of truth.** Field names, enums, constraints, and descriptions
+in `schema/causeway-manifest.schema.json` take precedence over everything. If
+docs or validator logic disagrees with the schema, fix the other thing.
 
-- **Policy check types are a contract.** The distinction between `fixable`
-  (schema/correctness) and `denied` (policy violation) is what determines
-  whether an agent may auto-retry. Changing a check's type requires a new
-  decision entry in PLANNING.md.
+**Bundled schema must be kept in sync manually.**
+`validator/src/causeway/data/causeway-manifest.schema.json` is a copy. When you
+change the canonical schema, copy it. There is no automated check.
 
-- **Exit codes are a contract.** 0 = valid, 1 = fixable only, 2 = at least
-  one denied. Breaking this breaks agent self-correction loops. Do not change
-  exit codes without updating PLANNING.md and all callers.
+**Exit codes are an external contract.** 0 = valid, 1 = fixable only, 2 = at
+least one denied. Agent self-correction loops depend on this. Do not change.
 
-- **Generated files are enforced by CI.** `validate-generated-files` job runs
-  `python docs/generate.py && git diff --exit-code`. A stale generated file
-  fails CI.
+**`fixable` vs `denied` is an agent-loop decision, not a style choice.** Denied
+errors block auto-retry (D18). Adding or changing a check's type requires a new
+entry in PLANNING.md, not just a code change.
 
-- **Bundled schema must be kept in sync.** `validator/src/causeway/data/` is
-  a copy of `schema/`. When you update `schema/causeway-manifest.schema.json`,
-  also copy it to the data directory.
+**Generated files are enforced by CI.** `validate-generated-files` runs
+`python docs/generate.py && git diff --exit-code`. If you edit a generated file
+by hand, CI will revert your change. Edit the source instead.
+
+**Phase 1 scope is enforced by convention.** Nothing outside the current artefacts
+(schema, validator, scaffold, tests, CI) should be added until Phase 2 planning
+is done. See PLANNING.md and CLAUDE.md's "Phase 1 scope boundary" section.
 
 ---
 
-## Local development
+## Validation architecture
 
-```sh
-# Install the validator in editable mode
-pip install -e ./validator
+Two-pass pipeline in `validate.py`:
 
-# Validate a manifest
-cwy validate causeway.yaml --json
-
-# Run the test suite
-pytest tests/ -v
-
-# Regenerate docs and rule files
-python docs/generate.py
-
-# Verify generated files are up to date
-python docs/generate.py && git diff --exit-code
-
-# Validate the schema itself against Draft 2020-12
-check-jsonschema --check-metaschema schema/causeway-manifest.schema.json
 ```
+Pass 1: classify.py → policy checks → denied FieldErrors
+Pass 2: schema.py  → jsonschema    → fixable FieldErrors
+                                      (fields already in denied set are skipped)
+```
+
+The key non-obvious detail: jsonschema's `if/then` errors report with
+`absolute_path = deque([])`. For `required` validator errors, extract the
+missing field name from `error.message` using a regex, not from the path.
+See `.work/gotchas.md` for the full explanation.
+
+---
+
+## Adding a new policy check
+
+1. Write the check function in `classify.py`. Return `list[FieldError]` with
+   `type="denied"`. Add a comment explaining the policy reason.
+2. Append the function to `ALL_CHECKS` at the bottom of `classify.py`.
+3. Add a fixture file in `tests/fixtures/` and a test in `test_validate.py`
+   that asserts exit code 2 and the expected denied field.
+4. Add a decision entry in PLANNING.md (required — see rule above).
+
+## Changing the schema
+
+1. Edit `schema/causeway-manifest.schema.json`.
+2. Copy it to `validator/src/causeway/data/causeway-manifest.schema.json`.
+3. Run `check-jsonschema --check-metaschema schema/causeway-manifest.schema.json`.
+4. Run `python docs/generate.py` to regenerate the reference doc.
+5. Update fixtures if the change affects valid/invalid instances.
+6. Run `pytest tests/ -v`.
+
+## Changing AGENTS.md
+
+1. Edit `scaffold/AGENTS.md`.
+2. Run `python docs/generate.py` — this regenerates `.cursorrules` and
+   `copilot-instructions.md`.
+3. Commit all three files together.
 
 ---
 
@@ -139,12 +149,12 @@ check-jsonschema --check-metaschema schema/causeway-manifest.schema.json
 
 ## Phase 1 scope boundary
 
-These are explicitly **not** in Phase 1 and should not be added until Phase 2+:
+These are **not** in Phase 1 and should not be added:
 
 - Container image builds (Dockerfiles, build pipelines)
 - Deployment commands or a `cwy deploy` subcommand
 - Auth proxy or identity management
 - Telemetry or load-bearing promotion logic
 - MCP server tooling
-- The `cwy promote`, `cwy contain`, or `cwy sunset` commands
-- PyPI publication (manual step, performed by the repo owner)
+- `cwy promote`, `cwy contain`, or `cwy sunset` commands
+- PyPI publication (manual step by the repo owner — do not automate)
