@@ -10,5 +10,3 @@ existing shadow IT*, not for maximum capability.
 > the frame, first principles, decisions (with rationale), and the open questions still being
 > resolved. Read it before doing any work. It is currently in the **planning phase**: no code
 > or implementation files exist yet, by deliberate choice (see the disposability principle).
-
-_Replace "Causeway" above if you chose a different name._
