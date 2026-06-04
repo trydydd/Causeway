@@ -143,8 +143,7 @@ for the people using it, so adoption is the real problem, not capability.
   denied = policy (never auto-retried; that's attacking the guardrail).
 - **Dead-end off-ramp** — the detected, graceful exit for a stuck user/agent with no one to call.
   Disposability (scrap-and-rebuild / scrap-and-restart), not debugging.
-- **Forced decision** — when an app crosses a usage/blast-radius threshold, someone *must* choose:
-  harden & promote, cap & contain, or sunset. "Don't promote" is valid.
+- **Forced decision** — when telemetry signals an app has reached load-bearing scale, someone *must* choose: harden-and-graduate to platform engineering (primary success outcome) · cap-and-contain (best-effort, no further growth, remain in citizen-dev) · sunset. "Don't graduate" is a valid outcome; silent drift into load-bearing is not.
 - **Blast radius** — the basis for tiering: who/what breaks if this app fails. Not technical complexity.
 - **Disposability** — the recovery and maintenance strategy: cheap-to-kill beats cheap-to-fix when
   there's no one to do forensics. Applies to apps *and* to poisoned agent context.
