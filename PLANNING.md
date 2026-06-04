@@ -106,6 +106,7 @@ for the people using it, so adoption is the real problem, not capability.
 | D23 | **Tier apps by blast radius, not technical complexity** (personal/team · business-process · load-bearing); threshold-crossing is a *forced decision* (harden/contain/sunset) | Apps silently crossing into load-bearing without anyone deciding is the core danger; "don't promote" must be a valid, defensible outcome | Promote on impressiveness; complexity-based tiers |
 | D24 | **Instrument once**: one telemetry layer serves both ops monitoring and promotion data, observable-by-default | If the user has to do anything to make an app observable, it won't happen; usage = the risk alarm and the promotion signal at once | Bolt analytics on later |
 | D25 | **Launch with amnesty + an explicit invite to port existing shadow IT** | You want disclosure; blame kills disclosure; sticks only work after the carrot is genuinely better | Lock down alternatives first |
+| D26 | **Business-process is the platform ceiling; load-bearing is not a tier but the exit-ramp trigger.** Admission, trigger line, and enforcement are tier-specific (from D23). Personal/team: presumptive admission, no enforcement needed (blast radius contained). Business-process: declaration-driven crossing validated by telemetry, moderate enforcement (named owner + decommission criteria + registry entry required at intake). Load-bearing behaviour detected by telemetry: hard automatic containment — the platform structurally cannot sustain this tier with zero staff, so it does not offer it. The business-process→load-bearing trigger is telemetry-driven, not declaration-driven, because owners have incentive to avoid declaring the crossing. Specific telemetry signals and containment mechanics are implementation detail. | No-staff makes a genuine load-bearing tier structurally unsustainable; offering it defers the mismatch rather than resolving it. Tier-specific answers follow naturally from the blast-radius taxonomy already set in D23. | A unified threshold/enforcement mechanism across all tiers; a load-bearing tier with an internal threshold |
 
 ---
 
@@ -114,11 +115,6 @@ for the people using it, so adoption is the real problem, not capability.
 > These are the highest-value things in this doc. A new context will paper over them with a
 > plausible default and resolve them in the wrong direction. Keep them open until *the owner* closes them.
 
-- **OT1 — The load-bearing ceiling (the central unresolved tension).** No-staff and "we run genuinely
-  load-bearing systems" cannot both be fully true at the top tier — someone owns the 2am pager. The
-  *exit ramp* is decided in principle (team adoption / buy supported software / formally-accepted
-  best-effort with manual fallback) but the **trigger line and the enforcement mechanism are not.**
-  Where exactly does an app *have* to leave the citizen-dev model, and what forces it to?
 - **OT2 — Persona segmentation.** We've committed to ≥2 front doors but not *which* personas get which,
   nor what the "thinner surface" concretely is (hosted constrained UI? human office hours? both?).
 - **OT3 — Logistics tooling specifically.** Almost certainly load-bearing; may not be appropriate for
