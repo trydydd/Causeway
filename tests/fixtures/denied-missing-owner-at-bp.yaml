@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=https://causeway.internal/schema/manifest/v1
+# DENIED: business-process tier without owner declaration — policy violation
+apiVersion: causeway/v1
+name: expense-approvals
+description: >
+  Allows team leads across the finance department to approve or reject expense
+  reports submitted via the HR portal. Reads from the expenses database and
+  sends approval notifications by email.
+runtime: python3.12
+entrypoint: uvicorn main:app --host 0.0.0.0 --port 8080
+port: 8080
+healthEndpoint: /health
+tier: business-process
+dataSources: []
+envVars: []

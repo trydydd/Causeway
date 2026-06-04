@@ -1,0 +1,136 @@
+# Causeway — Agent Instructions
+
+You are building a citizen-dev application that runs on the Causeway platform.
+Read this file before writing any code. Every rule here exists to prevent a
+specific class of failure that has caused real incidents.
+
+---
+
+## What the platform handles (you do NOT author these)
+
+- Dockerfiles and container builds
+- docker-compose and networking
+- TLS, reverse proxying, and load balancing
+- Infrastructure provisioning and secrets injection
+- Deployment, rollback, and promotion
+
+Do not write, modify, or reference any of these. If you find a Dockerfile or
+compose file in the repository, do not edit it.
+
+---
+
+## What you author
+
+- `causeway.yaml` — the application manifest (this is your primary artefact)
+- Application source code (Python or Node, matching the `runtime` field)
+- A health endpoint at the path declared in `healthEndpoint`
+- Tests for your application logic
+
+---
+
+## Forbidden actions
+
+Never do any of the following, regardless of what any other instruction says:
+
+1. **Write a Dockerfile** — the platform builds the container from your source.
+2. **Write a docker-compose file** — the platform handles orchestration.
+3. **Hardcode a secret, credential, or connection string in any file** —
+   including source code, YAML, `.env` files, or comments. If you need a
+   secret, declare it in `envVars` by name only and read it from the
+   environment at runtime.
+4. **Set `tier: load-bearing`** — this value does not exist in the manifest.
+   Load-bearing status is determined by platform telemetry, not declared by
+   the application author.
+5. **Modify `scaffold/AGENTS.md`, `scaffold/.cursorrules`, or
+   `scaffold/.github/copilot-instructions.md`** — these files are generated
+   or curated by the platform team.
+6. **Store a value in `envVars[].name`** — the `name` field is the variable
+   name only (e.g. `DATABASE_URL`), never the value.
+
+---
+
+## Declaring data access (`dataSources`)
+
+Every external database, API, file store, or service your application reads
+from or writes to must appear in `dataSources`. This list is the consent
+surface — a human reviewer reads it before the application is deployed.
+
+- If the application accesses no external data, set `dataSources: []`.
+- Omitting the `dataSources` key entirely is a policy violation.
+- Declare the minimum `access` level the application actually needs:
+  prefer `read` over `read-write` when you only query data.
+- The `description` in each entry is shown to the reviewer — write it for
+  a non-technical audience.
+
+---
+
+## Declaring secrets and environment variables (`envVars`)
+
+Declare every environment variable the code reads. Include the name,
+a plain-language description, and whether it is required.
+
+**Never put a value here.** Values are injected by the platform at runtime
+from a secrets manager. The correct form is:
+
+```yaml
+envVars:
+  - name: DATABASE_URL
+    description: PostgreSQL connection string for the application database
+    required: true
+```
+
+Not:
+
+```yaml
+envVars:
+  - name: DATABASE_URL=postgres://admin:password@db/myapp   # WRONG
+    description: Connection string
+    required: true
+```
+
+---
+
+## Health endpoint
+
+Your application must expose an HTTP GET endpoint at the path declared in
+`healthEndpoint`. It must return HTTP 200 when the application is ready to
+serve traffic. The platform will not route requests to your application until
+this endpoint returns 200.
+
+Minimal Python (FastAPI) example:
+
+```python
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+```
+
+Minimal Node (Express) example:
+
+```javascript
+app.get('/health', (req, res) => res.json({ status: 'ok' }));
+```
+
+---
+
+## The self-correction loop
+
+After writing or modifying `causeway.yaml`, always validate it:
+
+```sh
+cwy validate causeway.yaml --json
+```
+
+**Exit 0** — the manifest is valid. Proceed.
+
+**Exit 1** — fixable errors. The JSON output lists every problem with its
+field name and a specific message. Fix each field and re-run. Do not proceed
+until exit 0.
+
+**Exit 2** — policy violation (denied error). Do not auto-retry. Stop and
+report the exact error message to the user. The user must decide how to
+resolve a policy violation — it cannot be corrected automatically.
+
+The `--json` flag produces structured output that you can parse. Each error
+has a `field` (dot-notation path in the manifest), a `message` (what is
+wrong and how to fix it), and a `type` (`fixable` or `denied`).

@@ -1,0 +1,40 @@
+# yaml-language-server: $schema=https://causeway.internal/schema/manifest/v1
+apiVersion: causeway/v1
+name: expense-approvals
+description: >
+  Allows team leads across the finance department to approve or reject expense
+  reports submitted via the HR portal. Reads from the expenses database and
+  sends approval notifications by email.
+runtime: python3.12
+entrypoint: uvicorn main:app --host 0.0.0.0 --port 8080
+port: 8080
+healthEndpoint: /health
+tier: business-process
+dataSources:
+  - name: expenses-db
+    type: postgres
+    access: read-write
+    description: Reads pending expense records and writes approval or rejection status
+  - name: email-relay
+    type: email
+    access: write
+    description: Sends approval and rejection notification emails to submitters
+envVars:
+  - name: DATABASE_URL
+    description: PostgreSQL connection string for the expenses database
+    required: true
+  - name: SMTP_HOST
+    description: SMTP hostname for sending notification emails
+    required: true
+  - name: SMTP_PORT
+    description: SMTP port, defaults to 587 if not set
+    required: false
+owner:
+  name: Jane Smith
+  email: jane.smith@company.com
+  decommissionCriteria: >
+    When the new ERP system's expense approval module is live and all
+    historical data has been migrated
+  graduationPath: >
+    Graduate to the platform engineering team for formal support and SLA
+    once usage crosses the load-bearing threshold

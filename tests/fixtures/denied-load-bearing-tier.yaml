@@ -1,0 +1,14 @@
+# yaml-language-server: $schema=https://causeway.internal/schema/manifest/v1
+# DENIED: tier=load-bearing is not a valid manifest value — policy violation
+apiVersion: causeway/v1
+name: shift-planner
+description: >
+  Generates a daily shift schedule for the warehouse team based on staff
+  availability. Used by one team lead to plan their own team's shifts.
+runtime: python3.12
+entrypoint: python app.py
+port: 8080
+healthEndpoint: /health
+tier: load-bearing
+dataSources: []
+envVars: []
