@@ -1,5 +1,7 @@
 # Causeway — Claude Code Guide
 
+**Source code is the truth. If you have not read it, it does not exist — docs lie, memory lies, only the file is real.**
+
 **Starting a new session? Read `.work/handoff.md` first.** It contains the
 current state of the repo, what was built last, open maintenance traps, and
 the exact commands to verify the environment is clean before touching anything.
