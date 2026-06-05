@@ -1,6 +1,10 @@
 # Causeway — Claude Code Guide
 
-**Read PLANNING.md first.** Every design decision has a numbered entry (D1–D32)
+**Starting a new session? Read `.work/handoff.md` first.** It contains the
+current state of the repo, what was built last, open maintenance traps, and
+the exact commands to verify the environment is clean before touching anything.
+
+**Read PLANNING.md second.** Every design decision has a numbered entry (D1–D32)
 with a rationale. Conflicts with those decisions need a new decision entry, not
 a unilateral change.
 
