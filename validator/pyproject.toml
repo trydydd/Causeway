@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "causeway-platform"
+version = "0.1.0"
+description = "CLI tooling for the Causeway citizen-dev platform"
+requires-python = ">=3.11"
+dependencies = [
+    "click>=8.1",
+    "jsonschema>=4.23",
+    "ruamel.yaml>=0.18",
+]
+
+[project.scripts]
+cwy = "causeway.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+causeway = ["data/*.json"]
