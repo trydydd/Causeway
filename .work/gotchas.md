@@ -107,23 +107,25 @@ If you add them later, change the error-mapping logic.
 
 ---
 
-## 6. The bundled schema is a manual copy — no automated sync check
+## 6. The bundled schema used to be a manual copy — RESOLVED
 
-**Impact:** Medium — validator silently uses a stale schema after schema updates.
+**Status:** Fixed. Kept here because the underlying constraint still matters.
 
-`validator/src/causeway/data/causeway-manifest.schema.json` is a copy of
-`schema/causeway-manifest.schema.json`. There is no automated check that they
-match. If you update the canonical schema and forget to copy it, the validator
-will use the old schema without any error or warning.
+`validator/src/causeway/data/causeway-manifest.schema.json` must exist as a
+copy because the installed package loads it via `importlib.resources`
+(`schema.py`) and has no access to the repo's canonical `schema/` directory.
+Loading from the repo root in dev-mode was rejected: it would make the editable
+install behave differently from a PyPI install, masking exactly this bug.
 
-**Fix options for Phase 2:**
-- Add a test that compares the two files: `assert canonical == bundled`.
-- Or make `schema.py` load from the repo root in dev mode (editable install)
-  and from the bundled data in production.
+It is now a **generated artifact**: `docs/generate.py` writes the canonical
+schema text verbatim to the bundled path. Two guards prevent drift:
+- `validate-generated-files` CI job (`python docs/generate.py && git diff
+  --exit-code`) — fails the build if the committed copy is stale.
+- `test_bundled_schema_matches_canonical` in `tests/test_validate.py` — fast
+  local signal with a message pointing at `python docs/generate.py`.
 
-Current workaround: the CI `validate-scaffold-manifest` job will catch some
-drift, but only for the scaffold manifest — it won't catch field additions or
-description changes.
+If you ever change `schema.py`'s loading strategy, re-check that the bundled
+copy is still what the *installed* package reads.
 
 ---
 

@@ -51,7 +51,7 @@ validator/
     loader.py                     ← YAML parser (strips yaml-language-server header)
     schema.py                     ← loads bundled schema; Draft202012Validator
     data/
-      causeway-manifest.schema.json  ← MANUAL COPY of schema/ — keep in sync
+      causeway-manifest.schema.json  ← GENERATED verbatim copy of schema/ — do not edit
 
 docs/
   generate.py                     ← run after changing schema or AGENTS.md
@@ -77,9 +77,13 @@ tests/
 in `schema/causeway-manifest.schema.json` take precedence over everything. If
 docs or validator logic disagrees with the schema, fix the other thing.
 
-**Bundled schema must be kept in sync manually.**
-`validator/src/causeway/data/causeway-manifest.schema.json` is a copy. When you
-change the canonical schema, copy it. There is no automated check.
+**Bundled schema is generated, not hand-copied.**
+`validator/src/causeway/data/causeway-manifest.schema.json` is a verbatim copy
+of the canonical schema, emitted by `python docs/generate.py`. The installed
+package loads it via `importlib.resources` (it can't see the repo's `schema/`).
+Two guards stop it drifting: the `validate-generated-files` CI job and the
+`test_bundled_schema_matches_canonical` test. Never edit it by hand — edit the
+canonical schema and regenerate.
 
 **Exit codes are an external contract.** 0 = valid, 1 = fixable only, 2 = at
 least one denied. Agent self-correction loops depend on this. Do not change.
@@ -127,11 +131,11 @@ See `.work/gotchas.md` for the full explanation.
 ## Changing the schema
 
 1. Edit `schema/causeway-manifest.schema.json`.
-2. Copy it to `validator/src/causeway/data/causeway-manifest.schema.json`.
-3. Run `check-jsonschema --check-metaschema schema/causeway-manifest.schema.json`.
-4. Run `python docs/generate.py` to regenerate the reference doc.
-5. Update fixtures if the change affects valid/invalid instances.
-6. Run `pytest tests/ -v`.
+2. Run `check-jsonschema --check-metaschema schema/causeway-manifest.schema.json`.
+3. Run `python docs/generate.py` — regenerates the reference doc AND the bundled
+   schema copy at `validator/src/causeway/data/causeway-manifest.schema.json`.
+4. Update fixtures if the change affects valid/invalid instances.
+5. Run `pytest tests/ -v`.
 
 ## Changing AGENTS.md
 

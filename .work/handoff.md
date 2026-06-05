@@ -1,8 +1,9 @@
 # Causeway — Agent Handoff
 
-**Branch:** `claude/planning-alignment-ot1-atJlb`
-**Phase:** 1 complete, pushed. Phase 2 not started.
-**Last commit:** `d9692cd` — "Implement Phase 1: schema, validator (cwy validate), scaffold, and CI"
+**Branch:** `claude/continuation-Ar2Qh`
+**Phase:** 1 complete and merged (PR #1). Phase 2 not started.
+**Last work:** Closed the bundled-schema sync trap — the bundled copy is now a
+generated artifact of `docs/generate.py`, guarded by CI and a unit test.
 
 ---
 
@@ -65,13 +66,18 @@ from this list should be started without reading the relevant planning decisions
 
 ---
 
-## Open maintenance trap to address in Phase 2
+## Resolved: bundled-schema sync trap
 
 The bundled schema at `validator/src/causeway/data/causeway-manifest.schema.json`
-is a **manual copy** of `schema/causeway-manifest.schema.json`. There is no
-automated check that they match. Every time the canonical schema is updated,
-the copy must also be updated. Consider adding a test or making `schema.py`
-load from the repo root in editable mode.
+used to be a hand-maintained copy with no automated check. It is now a
+**generated artifact**: `docs/generate.py` writes the canonical schema verbatim
+to that path. Two guards prevent drift — the `validate-generated-files` CI job
+and `test_bundled_schema_matches_canonical`. The copy can't be deleted (the
+installed package loads it via `importlib.resources` and can't see the repo's
+`schema/`); loading from repo root in dev-mode was rejected because it would
+diverge editable from PyPI installs. See gotchas.md #6.
+
+No open maintenance traps remain.
 
 ---
 

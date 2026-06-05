@@ -5,6 +5,9 @@ Outputs (never edit by hand):
   docs/manifest-reference.md          — field reference from the JSON Schema
   scaffold/.cursorrules               — Cursor rule file
   scaffold/.github/copilot-instructions.md — GitHub Copilot instruction file
+  validator/src/causeway/data/causeway-manifest.schema.json — verbatim copy of
+      the canonical schema, bundled so the installed package can load it without
+      the repo present. Generated here so it cannot silently drift (D9).
 
 Run: python docs/generate.py
 CI asserts: git diff --exit-code (fail if any output is stale)
@@ -18,6 +21,9 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).parent.parent
 SCHEMA_PATH = REPO_ROOT / "schema" / "causeway-manifest.schema.json"
 AGENTS_PATH = REPO_ROOT / "scaffold" / "AGENTS.md"
+BUNDLED_SCHEMA_PATH = (
+    REPO_ROOT / "validator" / "src" / "causeway" / "data" / "causeway-manifest.schema.json"
+)
 
 GENERATED_BANNER = "<!-- GENERATED — do not edit by hand. Run `python docs/generate.py` to regenerate. -->\n\n"
 
@@ -176,13 +182,19 @@ def generate_copilot_instructions(agents_md: str) -> str:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
-    schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+    schema_text = SCHEMA_PATH.read_text(encoding="utf-8")
+    schema = json.loads(schema_text)
     agents_md = AGENTS_PATH.read_text(encoding="utf-8")
 
     outputs: list[tuple[Path, str]] = [
         (REPO_ROOT / "docs" / "manifest-reference.md", generate_manifest_reference(schema)),
         (REPO_ROOT / "scaffold" / ".cursorrules", generate_cursorrules(agents_md)),
         (REPO_ROOT / "scaffold" / ".github" / "copilot-instructions.md", generate_copilot_instructions(agents_md)),
+        # Verbatim copy — the installed package loads this via importlib.resources
+        # (schema.py) and has no access to the repo's canonical schema/. Writing it
+        # here makes drift impossible: CI's validate-generated-files job fails if the
+        # committed copy doesn't match the canonical source.
+        (BUNDLED_SCHEMA_PATH, schema_text),
     ]
 
     changed: list[Path] = []
