@@ -1,105 +1,115 @@
 # Causeway — Agent Handoff
 
 **Branch:** `claude/continuation-Ar2Qh`
-**Phase:** 1 complete and merged (PR #1). Phase 2 not started.
-**Last work:** Closed the bundled-schema sync trap — the bundled copy is now a
-generated artifact of `docs/generate.py`, guarded by CI and a unit test.
+**Phase:** Phase 1 complete (merged, PR #1). Phase 2 started — the **local dev
+loop** is built and proven end-to-end.
+**Last work:** Added `cwy build`/`run`/`up`/`down` — the platform builds a
+container from the manifest and runs it on localhost (run-and-see). Decisions
+D33–D37 in PLANNING.md.
 
 ---
 
-## What was built in this session
+## What exists now
 
-Phase 1 is the write→validate→fix loop proof-of-concept. All three artefacts
-are present and working end-to-end:
+**Phase 1 (write→validate→fix):**
 
-1. **`schema/causeway-manifest.schema.json`** — Draft 2020-12 source of truth.
-   All fields have LLM-tuned descriptions and examples. `if/then` enforces the
-   `owner` block at `business-process` tier.
+1. `schema/causeway-manifest.schema.json` — Draft 2020-12 source of truth.
+2. `validator/` — `cwy validate [PATH] [--json]`, two-pass (denied then fixable),
+   exit 0/1/2, five policy checks.
+3. `scaffold/` — `causeway.yaml`, `AGENTS.md`, generated `.cursorrules` +
+   `copilot-instructions.md`.
+4. `docs/generate.py` — idempotent generator (reference doc, rule files, bundled
+   schema copy).
 
-2. **`validator/`** — `pip install -e ./validator` → `cwy validate [PATH] [--json]`.
-   Two-pass: schema validation (fixable) then policy checks (denied). Exit 0/1/2.
-   Five policy checks: hardcoded secrets, load-bearing tier, dataSources omitted,
-   envVar name contains value, owner missing at business-process tier.
+**Phase 2 slice 1 — the local dev loop (NEW):**
 
-3. **`scaffold/`** — `causeway.yaml` template (passes `cwy validate`), `AGENTS.md`
-   (universal forbidden-action list + self-correction loop), generated
-   `.cursorrules` and `copilot-instructions.md`.
+5. `validator/src/causeway/build/`
+   - `dockerfile.py` — pure `render_dockerfile(manifest, has_deps)` + `BASE_IMAGES`
+     (1:1 with the runtime enum). Golden-tested, no runtime needed.
+   - `runner.py` — `docker`/`nerdctl` wrapper: runtime detection, ephemeral build
+     context, run with port + `.causeway.env` injection, health poll, teardown.
+6. `cli.py` — new subcommands `build` (+`--show-dockerfile`), `run`, `up`
+   (+`-d`), `down`. Build is gated on `cwy validate` first (same 0/1/2 contract).
+7. `tests/test_build.py` — 21 unit tests (renderer, gate, dry-run, runtime
+   detection, env parsing) + 2 opt-in `@integration` tests (real build+run+curl).
+   `tests/conftest.py` skips integration cleanly without a daemon.
+   `tests/build_fixtures/{py-health,node-health}/` — tiny health-only apps, used
+   only to smoke-test the loop (NOT user examples).
+8. `pytest.ini` — registers the `integration` marker; default `-m "not
+   integration"` so the suite is runtime-free by default.
+9. `docs/getting-started.md` — build-your-own-app-in-Cursor walkthrough (the
+   dogfood path).
 
-4. **`docs/generate.py`** — idempotent generator. Run it after changing the
-   schema or `AGENTS.md`. CI fails if generated files are stale.
-
-5. **`tests/`** — 26 pytest cases. All pass. Coverage: happy paths, all fixable
-   error classes, all five denied policy checks, file/parse errors, precedence,
-   JSON contract.
-
-6. **`.github/workflows/ci.yml`** — four jobs. Has not run on GitHub yet (push
-   just happened — check Actions tab).
-
-7. **`CLAUDE.md`** — codebase guide.
+**Proven:** both Python and Node fixtures build and run as real containers,
+health-check green, and serve HTTP 200 (`pytest -m integration`). The sandbox
+proof used a registry mirror (see gotchas #12) — irrelevant on a real machine.
 
 ---
 
 ## State of decisions
 
-All 32 decisions from PLANNING.md stand. One was updated:
+D1–D32 stand. Added:
 
-- **D12 updated:** CLI is `cwy validate` (not `platform validate`) — avoids
-  collision with other tools on corporate machines. The rationale and contract
-  (structured JSON, exit codes) are unchanged.
+- **D33** local dev loop is run-and-see, not deploy (no `cwy deploy`).
+- **D34** platform renders the Dockerfile into an ephemeral context;
+  `--show-dockerfile` for transparency.
+- **D35** POC golden base images = official `-slim` tags, 1:1 with the runtime enum.
+- **D36** local env via gitignored `.causeway.env`, injected at run time only.
+- **D37** a Causeway project is just a directory; app authoring is unconstrained.
 
----
-
-## What is NOT done (Phase 2+)
-
-See PLANNING.md and the "Phase 1 scope boundary" section of CLAUDE.md. Nothing
-from this list should be started without reading the relevant planning decisions:
-
-- Container image builds
-- Deployment / `cwy deploy` subcommand
-- Auth proxy
-- Telemetry and load-bearing promotion
-- MCP server
-- `cwy promote`, `cwy contain`, `cwy sunset` commands
-- **PyPI publication** — the owner (willard.hucks@gmail.com) handles this
-  manually. The package name to register is `causeway-platform`. The entry
-  point is `cwy`. Do not attempt to automate this.
+D12 note still applies (CLI is `cwy`).
 
 ---
 
-## Resolved: bundled-schema sync trap
+## What is NOT done (still out — needs a planning decision)
 
-The bundled schema at `validator/src/causeway/data/causeway-manifest.schema.json`
-used to be a hand-maintained copy with no automated check. It is now a
-**generated artifact**: `docs/generate.py` writes the canonical schema verbatim
-to that path. Two guards prevent drift — the `validate-generated-files` CI job
-and `test_bundled_schema_matches_canonical`. The copy can't be deleted (the
-installed package loads it via `importlib.resources` and can't see the repo's
-`schema/`); loading from repo root in dev-mode was rejected because it would
-diverge editable from PyPI installs. See gotchas.md #6.
-
-No open maintenance traps remain.
+- Deployment / `cwy deploy` (promotion stays in CI — D2, D13)
+- Auth proxy / identity (off-localhost — D5/D6)
+- Real secrets manager (local is `.causeway.env` only — D36)
+- Telemetry / load-bearing promotion
+- Platform-maintained image registry + digest pinning (D35 graduation step)
+- MCP server; `cwy promote`/`contain`/`sunset`
+- **PyPI publication** — owner (willard.hucks@gmail.com) does this manually.
+  Package `causeway-platform`, entry point `cwy`. Do not automate.
 
 ---
 
 ## How to pick up work
 
 ```sh
-git checkout claude/planning-alignment-ot1-atJlb
+git checkout claude/continuation-Ar2Qh
 pip install -e ./validator pytest check-jsonschema
 
-# Verify everything is green
-pytest tests/ -v
+# Verify green (all should pass):
+pytest tests/ -v                                    # unit suite (integration opt-out)
 check-jsonschema --check-metaschema schema/causeway-manifest.schema.json
 cwy validate scaffold/causeway.yaml --json
 python docs/generate.py && git diff --exit-code
+
+# Verify the build loop (needs a running container runtime):
+pytest tests/ -m integration -v
+# or manually:
+cwy up tests/build_fixtures/py-health -d && curl localhost:8080/health
+cwy down tests/build_fixtures/py-health
 ```
 
-All four should succeed before making any changes.
+---
+
+## Open maintenance traps
+
+- **`.gitignore` `build/` swallows the source package.** Re-included via
+  `!validator/src/causeway/build/`. If new files under `build/` don't show in
+  `git status`, that's why (gotchas #11).
+- **Base-image map vs schema enum** must stay in lockstep —
+  `test_base_image_map_covers_schema_runtimes` guards it.
+- Integration tests are **not** in CI by design (daemon + registry pulls →
+  nondeterministic). They are the local/dogfood proof.
 
 ---
 
 ## Key files to read first
 
-1. `PLANNING.md` — decisions and rationale (D1–D32). Read before changing anything.
-2. `CLAUDE.md` — repo structure, rules, and local dev commands.
-3. `.work/gotchas.md` — non-obvious implementation traps discovered in Phase 1.
+1. `PLANNING.md` — decisions D1–D37. Read before changing anything.
+2. `CLAUDE.md` — repo structure, rules, the local dev loop section.
+3. `.work/gotchas.md` — non-obvious traps (#11–#13 are from this slice).
+4. `docs/getting-started.md` — how a builder uses the paved road end-to-end.

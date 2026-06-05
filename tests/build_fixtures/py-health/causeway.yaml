@@ -1,0 +1,16 @@
+# yaml-language-server: $schema=https://causeway.internal/schema/manifest/v1
+# Test fixture only — a minimal health-only app used to smoke-test the build
+# loop (cwy build/run/up). NOT an example for users; the builder dogfoods from
+# a blank slate. Stdlib only (no requirements.txt) so the build needs no PyPI.
+apiVersion: causeway/v1
+name: py-health
+description: >
+  Minimal Python health-check fixture used by the build-loop tests. Serves a
+  health endpoint and a hello page. Accesses no external data.
+runtime: python3.12
+entrypoint: python app.py
+port: 8080
+healthEndpoint: /health
+tier: personal-team
+dataSources: []
+envVars: []
