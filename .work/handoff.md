@@ -21,7 +21,14 @@ D33–D37 in PLANNING.md.
 4. `docs/generate.py` — idempotent generator (reference doc, rule files, bundled
    schema copy).
 
-**Phase 2 slice 1 — the local dev loop (NEW):**
+**Phase 2 slice 1 — project scaffolding + the local dev loop (NEW):**
+
+4b. `cwy init [NAME]` (`scaffold.py`) — scaffolds a new project: `causeway.yaml`
+   (name pre-filled) + `AGENTS.md` + `.cursorrules`, never app code (D37/D38).
+   Scaffold files are bundled into `data/scaffold/` by `docs/generate.py` and
+   loaded via importlib.resources (the installed CLI can't see repo `scaffold/`).
+   Verified to ship in a built wheel. Removes the manual mkdir+copy friction the
+   first dogfood run surfaced.
 
 5. `validator/src/causeway/build/`
    - `dockerfile.py` — pure `render_dockerfile(manifest, has_deps)` + `BASE_IMAGES`
@@ -56,6 +63,8 @@ D1–D32 stand. Added:
 - **D35** POC golden base images = official `-slim` tags, 1:1 with the runtime enum.
 - **D36** local env via gitignored `.causeway.env`, injected at run time only.
 - **D37** a Causeway project is just a directory; app authoring is unconstrained.
+- **D38** `cwy init` scaffolds manifest + agent rules only (no app code), from a
+  package-bundled scaffold; removes first-touch friction.
 
 D12 note still applies (CLI is `cwy`).
 
@@ -86,6 +95,9 @@ check-jsonschema --check-metaschema schema/causeway-manifest.schema.json
 cwy validate scaffold/causeway.yaml --json
 python docs/generate.py && git diff --exit-code
 
+# Verify scaffolding:
+cwy init /tmp/demo-app && cwy validate /tmp/demo-app/causeway.yaml
+
 # Verify the build loop (needs a running container runtime):
 pytest tests/ -m integration -v
 # or manually:
@@ -102,6 +114,10 @@ cwy down tests/build_fixtures/py-health
   `git status`, that's why (gotchas #11).
 - **Base-image map vs schema enum** must stay in lockstep —
   `test_base_image_map_covers_schema_runtimes` guards it.
+- **Bundled scaffold vs canonical scaffold** must stay in lockstep —
+  `test_bundled_scaffold_matches_canonical` + the generated-files CI job guard
+  it. Edit `scaffold/`, then `python docs/generate.py`. `.cursorrules` is bundled
+  as `cursorrules` (no dot) for package_data; init writes the dot back (gotchas #14).
 - Integration tests are **not** in CI by design (daemon + registry pulls →
   nondeterministic). They are the local/dogfood proof.
 

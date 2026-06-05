@@ -282,3 +282,31 @@ lines.append(f'CMD ["sh", "-c", {json.dumps(entrypoint)}]')
 This silences the warning while keeping shell semantics (args, `npm start`, etc.)
 working verbatim. See `build/dockerfile.py`. Don't naively `.split()` the
 entrypoint into exec-form args — that breaks any entrypoint relying on the shell.
+
+---
+
+## 14. setuptools `package_data` globs skip dotfiles — bundle `.cursorrules` as `cursorrules`
+
+**Impact:** Medium — `cwy init` would silently ship without the Cursor rule file,
+and you'd only notice when an installed-from-wheel user's agent ignored the rules.
+
+`cwy init` writes a bundled `.cursorrules` into the new project. The scaffold
+files are bundled as package data (`data/scaffold/*`) so the installed package
+can read them via importlib.resources (the installed CLI can't see the repo's
+`scaffold/`). But a `package_data` glob like `data/scaffold/*` does **not** match
+files whose name starts with a dot — so a bundled `.cursorrules` would be omitted
+from the wheel.
+
+**Fix:** bundle it as `cursorrules` (no leading dot) — `docs/generate.py` writes
+`data/scaffold/cursorrules` — and have `cwy init` write it back out as
+`.cursorrules` (`scaffold._SCAFFOLD_FILES` maps bundled→output names). Same trick
+applies to any future dotfile that needs to ride along as package data.
+
+Verify packaging end to end, not just the editable install: an editable install
+reads straight from `src/`, so it masks missing-package-data bugs. Build a wheel
+and inspect it:
+
+```sh
+python -m build --wheel ./validator
+python -c "import zipfile; print([n for n in zipfile.ZipFile('validator/dist/...whl').namelist() if 'data/' in n])"
+```

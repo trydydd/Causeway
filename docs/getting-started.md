@@ -34,18 +34,19 @@ That is the entire install. Everything below is the loop you repeat.
 
 ## 1. Start a project
 
-A Causeway project is just a directory. Create one anywhere and copy the scaffold
-manifest into it as your starting point:
+A Causeway project is just a directory. Scaffold one with a single command:
 
 ```sh
-mkdir my-app && cd my-app
-cp /path/to/causeway/scaffold/causeway.yaml .
-cp /path/to/causeway/scaffold/AGENTS.md .       # so your IDE agent reads the rules
+cwy init my-app
+cd my-app
 ```
 
-If you use Cursor, also copy `scaffold/.cursorrules` into the project so the agent
-picks up the rules automatically. (`AGENTS.md` is the universal version; the IDE
-files are generated from it.)
+`cwy init` creates the directory and lays down the starting `causeway.yaml`
+(with its `name` pre-filled from the directory) plus the agent rule files
+(`AGENTS.md` and `.cursorrules`) so your IDE agent picks up the Causeway rules
+automatically. It does **not** scaffold any application code — that stays a blank
+slate for you and the agent. Run it inside an existing empty directory (`cwy init`
+with no name) to scaffold in place; it never overwrites an existing manifest.
 
 ---
 

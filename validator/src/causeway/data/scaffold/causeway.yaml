@@ -1,0 +1,78 @@
+# yaml-language-server: $schema=https://causeway.internal/schema/manifest/v1
+# Causeway Application Manifest
+# ─────────────────────────────
+# This file declares what your application needs.
+# The platform compiles it into a container — you never write a Dockerfile.
+# Run `cwy validate` at any time to check your manifest.
+#
+# Required fields are marked [required]. Optional fields show their defaults.
+# Remove comment lines once you have filled in each field.
+
+apiVersion: causeway/v1
+
+# [required] Unique name: lowercase letters, digits, hyphens only (3–40 chars)
+name: my-app
+
+# [required] Plain English: what does this app do and what data does it touch?
+# This is shown to the human reviewer — write for a non-technical audience.
+description: >
+  Describe what this application does in plain language.
+  Include what data it reads or writes and what business process it supports.
+
+# [required] The language runtime. Choose one:
+#   python3.11 | python3.12 | node20 | node22
+runtime: python3.12
+
+# [required] The command the platform runs to start your app inside the container
+entrypoint: python app.py
+
+# [required] The port your app listens on (1024–65535)
+port: 8080
+
+# [required] A GET endpoint that returns HTTP 200 when your app is ready
+healthEndpoint: /health
+
+# [required] The blast-radius tier. Choose one:
+#   personal-team   — only you/your team is affected if this breaks
+#   business-process — others outside your team depend on this
+# Do NOT set this to 'load-bearing' — the platform determines that from telemetry.
+tier: personal-team
+
+# [required] All external data sources this app accesses.
+# List every database, API, or service — even if it is read-only.
+# If the app accesses no external data, leave this as an empty list [].
+# Omitting this field entirely is a policy violation.
+dataSources: []
+# Example — uncomment and fill in for each data source:
+# dataSources:
+#   - name: my-database          # lowercase-with-hyphens identifier
+#     type: postgres             # postgres | mysql | mssql | sqlite | rest-api |
+#                                # graphql | sharepoint | blob-storage | email | other
+#     access: read               # read | read-write | write
+#     description: >             # plain English: what data, for what purpose
+#       Reads approved expense records to generate the monthly summary report
+
+# [required] Environment variables your app reads at runtime.
+# Declare the NAME only — never put values here.
+# Values are injected by the platform from a secrets manager.
+# If the app needs no env vars, leave this as an empty list [].
+envVars: []
+# Example — uncomment and fill in for each variable:
+# envVars:
+#   - name: DATABASE_URL         # UPPERCASE_WITH_UNDERSCORES
+#     description: PostgreSQL connection string for the application database
+#     required: true             # true if app fails to start without this
+
+# owner: — Required ONLY when tier is 'business-process'
+# Identifies the named human responsible for this app's behaviour and lifecycle.
+# Must be a person, not a team or role.
+#
+# owner:
+#   name: Full Name
+#   email: owner@company.com
+#   decommissionCriteria: >
+#     Specific, evaluable condition under which this app should be retired.
+#     Example: "When the new ERP expense module is live and data is migrated"
+#   graduationPath: >
+#     Where this app goes if it becomes load-bearing.
+#     Example: "Graduate to the platform engineering team for formal support"

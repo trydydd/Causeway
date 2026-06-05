@@ -6,7 +6,7 @@
 current state of the repo, what was built last, open maintenance traps, and
 the exact commands to verify the environment is clean before touching anything.
 
-**Read PLANNING.md second.** Every design decision has a numbered entry (D1–D37)
+**Read PLANNING.md second.** Every design decision has a numbered entry (D1–D38)
 with a rationale. Conflicts with those decisions need a new decision entry, not
 a unilateral change.
 
@@ -48,16 +48,19 @@ scaffold/
 validator/
   pyproject.toml                  ← entry point: cwy = causeway.cli:main
   src/causeway/
-    cli.py                        ← click group; validate + build/run/up/down subcommands
+    cli.py                        ← click group; validate + init + build/run/up/down
     validate.py                   ← two-pass orchestration, FieldError, ValidationResult
     classify.py                   ← five policy checks → denied errors
     loader.py                     ← YAML parser (strips yaml-language-server header)
     schema.py                     ← loads bundled schema; Draft202012Validator
+    scaffold.py                   ← cwy init: writes bundled scaffold into a new project (D38)
     build/                        ← local dev loop (Phase 2). NOTE: un-ignored in .gitignore
       dockerfile.py               ← pure Dockerfile renderer + base-image map (D34/D35)
       runner.py                   ← docker/nerdctl wrapper: build, run, health poll, teardown
     data/
       causeway-manifest.schema.json  ← GENERATED verbatim copy of schema/ — do not edit
+      scaffold/                   ← GENERATED bundle for cwy init (manifest, AGENTS.md,
+                                    cursorrules) — do not edit; emitted by docs/generate.py
 
 docs/
   generate.py                     ← run after changing schema or AGENTS.md
@@ -69,6 +72,7 @@ tests/
   build_fixtures/                 ← tiny health-only py/node apps; smoke-test the build loop
   test_validate.py                ← validator pytest cases
   test_build.py                   ← build-loop tests (unit + opt-in @integration)
+  test_init.py                    ← cwy init + bundled-scaffold drift guard
   conftest.py                     ← docker_ready fixture (skips integration without a daemon)
 
 pytest.ini                        ← integration marker; default addopts = -m "not integration"
@@ -156,12 +160,25 @@ See `.work/gotchas.md` for the full explanation.
 4. Update fixtures if the change affects valid/invalid instances.
 5. Run `pytest tests/ -v`.
 
-## Changing AGENTS.md
+## Changing AGENTS.md or the scaffold manifest
 
-1. Edit `scaffold/AGENTS.md`.
-2. Run `python docs/generate.py` — this regenerates `.cursorrules` and
-   `copilot-instructions.md`.
-3. Commit all three files together.
+1. Edit `scaffold/AGENTS.md` (or `scaffold/causeway.yaml`).
+2. Run `python docs/generate.py` — regenerates `.cursorrules`,
+   `copilot-instructions.md`, AND the bundled `cwy init` copies under
+   `validator/src/causeway/data/scaffold/`.
+3. Commit the source and all generated files together. `test_init.py` and the
+   `validate-generated-files` CI job fail if the bundle drifts.
+
+---
+
+## Starting a project (`cwy init`)
+
+`cwy init [NAME]` scaffolds a new project — `causeway.yaml` (name pre-filled) +
+`AGENTS.md` + `.cursorrules`, never app code (D37/D38). The scaffold is bundled
+into the package (`data/scaffold/`) and loaded via importlib.resources, because
+the installed CLI can't see the repo's `scaffold/` (same constraint as the
+schema, D9). Logic is in `scaffold.py`; it refuses to overwrite an existing
+manifest.
 
 ---
 
@@ -213,8 +230,8 @@ They are the local/dogfood proof. Run them on a machine with a runtime.
 
 ## Scope boundary
 
-**In (built):** the validator (`cwy validate`) and the local dev loop
-(`cwy build`/`run`/`up`/`down`).
+**In (built):** the validator (`cwy validate`), project scaffolding (`cwy init`),
+and the local dev loop (`cwy build`/`run`/`up`/`down`).
 
 **Out — do not add without a planning decision:**
 

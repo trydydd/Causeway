@@ -6,7 +6,7 @@ from pathlib import Path
 
 import click
 
-from causeway import loader
+from causeway import loader, scaffold
 from causeway.build import dockerfile, runner
 from causeway.validate import validate
 
@@ -264,12 +264,51 @@ def down_cmd(path: str) -> None:
     click.echo(f"Stopped and removed {data['name']} (if it was running).")
 
 
+@click.command("init")
+@click.argument("name", required=False)
+def init_cmd(name: str | None) -> None:
+    """Scaffold a new Causeway project (manifest + agent rules).
+
+    With NAME, creates ./NAME/ and uses it as the app name. With no NAME,
+    scaffolds the current directory. Application code is intentionally NOT
+    scaffolded — write it however you like. Will not overwrite an existing
+    causeway.yaml.
+    """
+    if name:
+        target = Path(name)
+        app_name = name if scaffold.valid_app_name(name) else None
+    else:
+        target = Path(".")
+        resolved = target.resolve().name
+        app_name = resolved if scaffold.valid_app_name(resolved) else None
+
+    try:
+        written = scaffold.init_project(target, app_name=app_name)
+    except scaffold.InitError as exc:
+        click.echo(str(exc), err=True)
+        sys.exit(1)
+
+    click.echo("Created a new Causeway project:")
+    for path in written:
+        click.echo(f"  {path}")
+
+    where = f"cd {name} && " if name else ""
+    click.echo(
+        "\nNext steps:\n"
+        "  1. Open this directory in your IDE — the agent rules (AGENTS.md / "
+        ".cursorrules) tell the agent how to build on Causeway.\n"
+        "  2. Describe your app to the agent; it fills in causeway.yaml and writes the code.\n"
+        f"  3. {where}cwy up      # build and run it on localhost"
+    )
+
+
 @click.group()
 def main() -> None:
     """Causeway platform CLI."""
 
 
 main.add_command(validate_cmd)
+main.add_command(init_cmd)
 main.add_command(build_cmd)
 main.add_command(run_cmd)
 main.add_command(up_cmd)

@@ -21,8 +21,17 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).parent.parent
 SCHEMA_PATH = REPO_ROOT / "schema" / "causeway-manifest.schema.json"
 AGENTS_PATH = REPO_ROOT / "scaffold" / "AGENTS.md"
+SCAFFOLD_MANIFEST_PATH = REPO_ROOT / "scaffold" / "causeway.yaml"
 BUNDLED_SCHEMA_PATH = (
     REPO_ROOT / "validator" / "src" / "causeway" / "data" / "causeway-manifest.schema.json"
+)
+# Scaffold files bundled into the package so the installed `cwy init` can write
+# them — the installed package cannot see the repo's scaffold/ dir (same
+# constraint as the bundled schema, D9). `.cursorrules` is bundled as
+# `cursorrules` (no leading dot) so setuptools package_data globbing picks it up;
+# `cwy init` writes it back out as `.cursorrules`.
+BUNDLED_SCAFFOLD_DIR = (
+    REPO_ROOT / "validator" / "src" / "causeway" / "data" / "scaffold"
 )
 
 GENERATED_BANNER = "<!-- GENERATED — do not edit by hand. Run `python docs/generate.py` to regenerate. -->\n\n"
@@ -185,16 +194,23 @@ def main() -> None:
     schema_text = SCHEMA_PATH.read_text(encoding="utf-8")
     schema = json.loads(schema_text)
     agents_md = AGENTS_PATH.read_text(encoding="utf-8")
+    scaffold_manifest = SCAFFOLD_MANIFEST_PATH.read_text(encoding="utf-8")
+    cursorrules = generate_cursorrules(agents_md)
 
     outputs: list[tuple[Path, str]] = [
         (REPO_ROOT / "docs" / "manifest-reference.md", generate_manifest_reference(schema)),
-        (REPO_ROOT / "scaffold" / ".cursorrules", generate_cursorrules(agents_md)),
+        (REPO_ROOT / "scaffold" / ".cursorrules", cursorrules),
         (REPO_ROOT / "scaffold" / ".github" / "copilot-instructions.md", generate_copilot_instructions(agents_md)),
         # Verbatim copy — the installed package loads this via importlib.resources
         # (schema.py) and has no access to the repo's canonical schema/. Writing it
         # here makes drift impossible: CI's validate-generated-files job fails if the
         # committed copy doesn't match the canonical source.
         (BUNDLED_SCHEMA_PATH, schema_text),
+        # Scaffold files bundled for `cwy init`. Same drift guarantee as the schema
+        # copy — generated here, enforced by CI and test_bundled_scaffold_matches_canonical.
+        (BUNDLED_SCAFFOLD_DIR / "causeway.yaml", scaffold_manifest),
+        (BUNDLED_SCAFFOLD_DIR / "AGENTS.md", agents_md),
+        (BUNDLED_SCAFFOLD_DIR / "cursorrules", cursorrules),
     ]
 
     changed: list[Path] = []
