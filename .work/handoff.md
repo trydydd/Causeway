@@ -18,17 +18,22 @@ D33–D37 in PLANNING.md.
    exit 0/1/2, five policy checks.
 3. `scaffold/` — `causeway.yaml`, `AGENTS.md`, generated `.cursorrules` +
    `copilot-instructions.md`.
-4. `docs/generate.py` — idempotent generator (reference doc, rule files, bundled
-   schema copy).
-
+4. `scripts/generate.py` — idempotent generator (reference doc, repo rule files,
+   bundled schema + scaffold sources). Lives in `scripts/`, NOT `docs/` (no code
+   in a docs dir); imports `causeway.rules`, so CI installs the package first.
 **Phase 2 slice 1 — project scaffolding + the local dev loop (NEW):**
 
+4c. `causeway/rules.py` — the agent-rule registry (`RULE_FILES` + `render`): the
+   single `AGENTS.md`→tool-rule-file transform, shared by `cwy init` and the
+   generator (D39). Add a host = one entry.
+
 4b. `cwy init [NAME]` (`scaffold.py`) — scaffolds a new project: `causeway.yaml`
-   (name pre-filled) + `AGENTS.md` + `.cursorrules`, never app code (D37/D38).
-   Scaffold files are bundled into `data/scaffold/` by `docs/generate.py` and
-   loaded via importlib.resources (the installed CLI can't see repo `scaffold/`).
-   Verified to ship in a built wheel. Removes the manual mkdir+copy friction the
-   first dogfood run surfaced.
+   (name pre-filled) + `AGENTS.md`, then **derives** `.cursorrules` +
+   `.github/copilot-instructions.md` from the bundled `AGENTS.md` via `rules.py`
+   — never app code (D37/D38/D39). Only the two sources are bundled into
+   `data/scaffold/`; rule files are derived, so they match the repo copies by
+   construction. Verified to ship in a built wheel. Removes the manual mkdir+copy
+   friction the first dogfood run surfaced.
 
 5. `validator/src/causeway/build/`
    - `dockerfile.py` — pure `render_dockerfile(manifest, has_deps)` + `BASE_IMAGES`
@@ -63,8 +68,10 @@ D1–D32 stand. Added:
 - **D35** POC golden base images = official `-slim` tags, 1:1 with the runtime enum.
 - **D36** local env via gitignored `.causeway.env`, injected at run time only.
 - **D37** a Causeway project is just a directory; app authoring is unconstrained.
-- **D38** `cwy init` scaffolds manifest + agent rules only (no app code), from a
-  package-bundled scaffold; removes first-touch friction.
+- **D38** `cwy init` scaffolds manifest + agent rules only (no app code);
+  removes first-touch friction.
+- **D39** tool rule files are derived at init from one extensible registry
+  (`rules.py`), not bundled; generator moved out of `docs/` into `scripts/`.
 
 D12 note still applies (CLI is `cwy`).
 
@@ -93,7 +100,7 @@ pip install -e ./validator pytest check-jsonschema
 pytest tests/ -v                                    # unit suite (integration opt-out)
 check-jsonschema --check-metaschema schema/causeway-manifest.schema.json
 cwy validate scaffold/causeway.yaml --json
-python docs/generate.py && git diff --exit-code
+python scripts/generate.py && git diff --exit-code
 
 # Verify scaffolding:
 cwy init /tmp/demo-app && cwy validate /tmp/demo-app/causeway.yaml
@@ -116,7 +123,7 @@ cwy down tests/build_fixtures/py-health
   `test_base_image_map_covers_schema_runtimes` guards it.
 - **Bundled scaffold vs canonical scaffold** must stay in lockstep —
   `test_bundled_scaffold_matches_canonical` + the generated-files CI job guard
-  it. Edit `scaffold/`, then `python docs/generate.py`. `.cursorrules` is bundled
+  it. Edit `scaffold/`, then `python scripts/generate.py`. `.cursorrules` is bundled
   as `cursorrules` (no dot) for package_data; init writes the dot back (gotchas #14).
 - Integration tests are **not** in CI by design (daemon + registry pulls →
   nondeterministic). They are the local/dogfood proof.

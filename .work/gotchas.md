@@ -117,12 +117,12 @@ copy because the installed package loads it via `importlib.resources`
 Loading from the repo root in dev-mode was rejected: it would make the editable
 install behave differently from a PyPI install, masking exactly this bug.
 
-It is now a **generated artifact**: `docs/generate.py` writes the canonical
+It is now a **generated artifact**: `scripts/generate.py` writes the canonical
 schema text verbatim to the bundled path. Two guards prevent drift:
-- `validate-generated-files` CI job (`python docs/generate.py && git diff
+- `validate-generated-files` CI job (`python scripts/generate.py && git diff
   --exit-code`) — fails the build if the committed copy is stale.
 - `test_bundled_schema_matches_canonical` in `tests/test_validate.py` — fast
-  local signal with a message pointing at `python docs/generate.py`.
+  local signal with a message pointing at `python scripts/generate.py`.
 
 If you ever change `schema.py`'s loading strategy, re-check that the bundled
 copy is still what the *installed* package reads.
@@ -151,7 +151,7 @@ enough, but the root cause (YAML version) is non-obvious.
 
 The CI job runs:
 ```sh
-python docs/generate.py
+python scripts/generate.py
 git diff --exit-code
 ```
 
@@ -285,28 +285,31 @@ entrypoint into exec-form args — that breaks any entrypoint relying on the she
 
 ---
 
-## 14. setuptools `package_data` globs skip dotfiles — bundle `.cursorrules` as `cursorrules`
+## 14. Rule files are derived at init, not bundled — and why (history)
 
-**Impact:** Medium — `cwy init` would silently ship without the Cursor rule file,
-and you'd only notice when an installed-from-wheel user's agent ignored the rules.
+**Impact:** Medium — informs how `cwy init` produces `.cursorrules` /
+`.github/copilot-instructions.md`, and records a packaging trap to avoid.
 
-`cwy init` writes a bundled `.cursorrules` into the new project. The scaffold
-files are bundled as package data (`data/scaffold/*`) so the installed package
-can read them via importlib.resources (the installed CLI can't see the repo's
-`scaffold/`). But a `package_data` glob like `data/scaffold/*` does **not** match
-files whose name starts with a dot — so a bundled `.cursorrules` would be omitted
-from the wheel.
+`AGENTS.md` is now natively read by the target hosts, so the per-tool rule files
+are compatibility shims (D39). They are **derived** at init from the bundled
+`AGENTS.md` via the single registry in `causeway/rules.py` — only the genuine
+sources (`causeway.yaml`, `AGENTS.md`) are bundled. Both `cwy init` and
+`scripts/generate.py` use `rules.RULE_FILES` + `rules.render`, so the repo's
+`scaffold/` copies and the files `cwy init` writes are identical by construction.
 
-**Fix:** bundle it as `cursorrules` (no leading dot) — `docs/generate.py` writes
-`data/scaffold/cursorrules` — and have `cwy init` write it back out as
-`.cursorrules` (`scaffold._SCAFFOLD_FILES` maps bundled→output names). Same trick
-applies to any future dotfile that needs to ride along as package data.
+**The trap this design avoids:** setuptools `package_data` globs (e.g.
+`data/scaffold/*`) do **not** match dotfiles, so an earlier version that *bundled*
+a `.cursorrules` had to ship it as `cursorrules` (no dot) and rename it at init —
+a hack that only existed because we bundled a derived file. Deriving instead of
+bundling removes the hack: init writes the dotfile name directly from the rendered
+string, and nothing dot-named ever needs to be package data.
 
-Verify packaging end to end, not just the editable install: an editable install
-reads straight from `src/`, so it masks missing-package-data bugs. Build a wheel
-and inspect it:
+Still: **verify packaging end to end, not just the editable install** — an
+editable install reads from `src/`, masking missing-package-data bugs. Build a
+wheel and inspect it (confirm `rules.py` ships and `data/scaffold/` has only the
+two sources):
 
 ```sh
 python -m build --wheel ./validator
-python -c "import zipfile; print([n for n in zipfile.ZipFile('validator/dist/...whl').namelist() if 'data/' in n])"
+python -c "import zipfile; print([n for n in zipfile.ZipFile('validator/dist/...whl').namelist() if 'rules.py' in n or 'data/' in n])"
 ```

@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from causeway import scaffold
+from causeway import rules, scaffold
 
 REPO_ROOT = Path(__file__).parent.parent
 
@@ -20,15 +20,15 @@ def _run(*args: str, cwd: Path | None = None) -> subprocess.CompletedProcess:
 
 
 # ---------------------------------------------------------------------------
-# Bundled scaffold must match the canonical scaffold (drift guard, like the
-# schema). CI's validate-generated-files job also catches this; this is the
-# fast local signal pointing at `python docs/generate.py`.
+# Only the genuine SOURCE files are bundled now (the rule files are derived at
+# init, not bundled — D39). The bundled sources must match the canonical
+# scaffold. CI's validate-generated-files job also catches this; this is the
+# fast local signal pointing at `python scripts/generate.py`.
 # ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize("bundled,canonical", [
     ("causeway.yaml", "scaffold/causeway.yaml"),
     ("AGENTS.md", "scaffold/AGENTS.md"),
-    ("cursorrules", "scaffold/.cursorrules"),
 ])
 def test_bundled_scaffold_matches_canonical(bundled, canonical):
     bundled_text = (
@@ -37,7 +37,7 @@ def test_bundled_scaffold_matches_canonical(bundled, canonical):
     canonical_text = (REPO_ROOT / canonical).read_text(encoding="utf-8")
     assert bundled_text == canonical_text, (
         f"Bundled scaffold '{bundled}' is out of sync with '{canonical}'. "
-        "Run `python docs/generate.py` to regenerate it."
+        "Run `python scripts/generate.py` to regenerate it."
     )
 
 
@@ -52,6 +52,18 @@ def test_init_named_creates_project(tmp_path):
     assert (project / "causeway.yaml").is_file()
     assert (project / "AGENTS.md").is_file()
     assert (project / ".cursorrules").is_file()
+    assert (project / ".github" / "copilot-instructions.md").is_file()
+
+
+def test_init_derives_rule_files_from_agents_md(tmp_path):
+    # Each rule file is the registry transform applied to the bundled AGENTS.md,
+    # so init output is identical to the repo's generated copies (no drift, D39).
+    _run("init", "myapp", cwd=tmp_path)
+    project = tmp_path / "myapp"
+    agents_md = (project / "AGENTS.md").read_text()
+    for rule in rules.RULE_FILES:
+        written = (project / rule.path).read_text()
+        assert written == rules.render(rule, agents_md)
 
 
 def test_init_prefills_name_from_dir(tmp_path):
@@ -113,4 +125,6 @@ def test_valid_app_name():
 def test_init_project_returns_written_paths(tmp_path):
     written = scaffold.init_project(tmp_path / "proj", app_name="proj")
     names = {p.name for p in written}
-    assert names == {"causeway.yaml", "AGENTS.md", ".cursorrules"}
+    assert names == {
+        "causeway.yaml", "AGENTS.md", ".cursorrules", "copilot-instructions.md",
+    }

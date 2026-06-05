@@ -1,4 +1,4 @@
-<!-- GENERATED — do not edit by hand. Run `python docs/generate.py` to regenerate. -->
+<!-- GENERATED — do not edit by hand. Run `python scripts/generate.py` to regenerate. -->
 
 # Causeway Manifest Field Reference
 

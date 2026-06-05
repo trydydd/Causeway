@@ -6,7 +6,7 @@
 current state of the repo, what was built last, open maintenance traps, and
 the exact commands to verify the environment is clean before touching anything.
 
-**Read PLANNING.md second.** Every design decision has a numbered entry (D1–D38)
+**Read PLANNING.md second.** Every design decision has a numbered entry (D1–D39)
 with a rationale. Conflicts with those decisions need a new decision entry, not
 a unilateral change.
 
@@ -26,7 +26,7 @@ pytest tests/ -v                                    # run tests (integration opt
 pytest tests/ -m integration -v                     # real build+run+health tests (needs a daemon)
 cwy validate scaffold/causeway.yaml --json          # smoke test the validator
 cwy up tests/build_fixtures/py-health -d            # smoke test the build loop; then `cwy down ...`
-python docs/generate.py                             # regenerate derived files
+python scripts/generate.py                          # regenerate derived files
 check-jsonschema --check-metaschema schema/causeway-manifest.schema.json
 ```
 
@@ -40,10 +40,10 @@ schema/
 
 scaffold/
   causeway.yaml                   ← pre-filled template; must pass cwy validate
-  AGENTS.md                       ← universal agent instructions; the source
-  .cursorrules                    ← GENERATED — do not edit
+  AGENTS.md                       ← universal agent instructions; the source of the rules
+  .cursorrules                    ← GENERATED from AGENTS.md (rules.py) — do not edit
   .github/
-    copilot-instructions.md       ← GENERATED — do not edit
+    copilot-instructions.md       ← GENERATED from AGENTS.md (rules.py) — do not edit
 
 validator/
   pyproject.toml                  ← entry point: cwy = causeway.cli:main
@@ -53,17 +53,20 @@ validator/
     classify.py                   ← five policy checks → denied errors
     loader.py                     ← YAML parser (strips yaml-language-server header)
     schema.py                     ← loads bundled schema; Draft202012Validator
-    scaffold.py                   ← cwy init: writes bundled scaffold into a new project (D38)
+    rules.py                      ← agent-rule registry: AGENTS.md → tool rule files (D39)
+    scaffold.py                   ← cwy init: writes sources + derives rule files (D38/D39)
     build/                        ← local dev loop (Phase 2). NOTE: un-ignored in .gitignore
       dockerfile.py               ← pure Dockerfile renderer + base-image map (D34/D35)
       runner.py                   ← docker/nerdctl wrapper: build, run, health poll, teardown
     data/
       causeway-manifest.schema.json  ← GENERATED verbatim copy of schema/ — do not edit
-      scaffold/                   ← GENERATED bundle for cwy init (manifest, AGENTS.md,
-                                    cursorrules) — do not edit; emitted by docs/generate.py
+      scaffold/                   ← GENERATED bundle for cwy init: SOURCES only
+                                    (causeway.yaml, AGENTS.md) — do not edit; from scripts/generate.py
+
+scripts/
+  generate.py                     ← run after changing schema/AGENTS.md/scaffold (was docs/)
 
 docs/
-  generate.py                     ← run after changing schema or AGENTS.md
   manifest-reference.md           ← GENERATED — do not edit
   getting-started.md              ← build-your-own-app-in-Cursor walkthrough (hand-written)
 
@@ -95,7 +98,7 @@ docs or validator logic disagrees with the schema, fix the other thing.
 
 **Bundled schema is generated, not hand-copied.**
 `validator/src/causeway/data/causeway-manifest.schema.json` is a verbatim copy
-of the canonical schema, emitted by `python docs/generate.py`. The installed
+of the canonical schema, emitted by `python scripts/generate.py`. The installed
 package loads it via `importlib.resources` (it can't see the repo's `schema/`).
 Two guards stop it drifting: the `validate-generated-files` CI job and the
 `test_bundled_schema_matches_canonical` test. Never edit it by hand — edit the
@@ -109,7 +112,7 @@ errors block auto-retry (D18). Adding or changing a check's type requires a new
 entry in PLANNING.md, not just a code change.
 
 **Generated files are enforced by CI.** `validate-generated-files` runs
-`python docs/generate.py && git diff --exit-code`. If you edit a generated file
+`python scripts/generate.py && git diff --exit-code`. If you edit a generated file
 by hand, CI will revert your change. Edit the source instead.
 
 **Scope is enforced by convention.** The build is deliberately staged. The local
@@ -155,7 +158,7 @@ See `.work/gotchas.md` for the full explanation.
 
 1. Edit `schema/causeway-manifest.schema.json`.
 2. Run `check-jsonschema --check-metaschema schema/causeway-manifest.schema.json`.
-3. Run `python docs/generate.py` — regenerates the reference doc AND the bundled
+3. Run `python scripts/generate.py` — regenerates the reference doc AND the bundled
    schema copy at `validator/src/causeway/data/causeway-manifest.schema.json`.
 4. Update fixtures if the change affects valid/invalid instances.
 5. Run `pytest tests/ -v`.
@@ -163,22 +166,29 @@ See `.work/gotchas.md` for the full explanation.
 ## Changing AGENTS.md or the scaffold manifest
 
 1. Edit `scaffold/AGENTS.md` (or `scaffold/causeway.yaml`).
-2. Run `python docs/generate.py` — regenerates `.cursorrules`,
-   `copilot-instructions.md`, AND the bundled `cwy init` copies under
-   `validator/src/causeway/data/scaffold/`.
+2. Run `python scripts/generate.py` — regenerates the repo's `.cursorrules` +
+   `copilot-instructions.md` (derived from AGENTS.md via `rules.py`) AND the
+   bundled `cwy init` sources under `validator/src/causeway/data/scaffold/`.
 3. Commit the source and all generated files together. `test_init.py` and the
-   `validate-generated-files` CI job fail if the bundle drifts.
+   `validate-generated-files` CI job fail if anything drifts.
+
+## Adding an agent host (e.g. Windsurf, Cline)
+
+Append one `RuleFile(path, label, preamble)` to `RULE_FILES` in
+`validator/src/causeway/rules.py`, then run `python scripts/generate.py`. Both
+the repo's `scaffold/` copy and what `cwy init` writes update from that one entry.
 
 ---
 
 ## Starting a project (`cwy init`)
 
 `cwy init [NAME]` scaffolds a new project — `causeway.yaml` (name pre-filled) +
-`AGENTS.md` + `.cursorrules`, never app code (D37/D38). The scaffold is bundled
-into the package (`data/scaffold/`) and loaded via importlib.resources, because
-the installed CLI can't see the repo's `scaffold/` (same constraint as the
-schema, D9). Logic is in `scaffold.py`; it refuses to overwrite an existing
-manifest.
+`AGENTS.md` + the tool rule files, never app code (D37/D38). Only the genuine
+sources (`causeway.yaml`, `AGENTS.md`) are bundled into the package and loaded via
+importlib.resources (the installed CLI can't see the repo's `scaffold/`, D9); the
+rule files are **derived** from the bundled `AGENTS.md` via `rules.py` (D39), so
+they match the repo's generated copies by construction. Logic is in `scaffold.py`;
+it refuses to overwrite an existing manifest.
 
 ---
 

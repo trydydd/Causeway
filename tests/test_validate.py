@@ -288,7 +288,7 @@ def test_denied_connection_string_in_description(tmp_path):
 # ---------------------------------------------------------------------------
 # Bundled schema sync — the validator loads a bundled copy of the canonical
 # schema (schema.py uses importlib.resources). It is generated verbatim by
-# docs/generate.py so it cannot drift. CI's validate-generated-files job also
+# scripts/generate.py so it cannot drift. CI's validate-generated-files job also
 # guards this; this test gives a fast, explicit local signal.
 # ---------------------------------------------------------------------------
 
@@ -300,7 +300,7 @@ def test_bundled_schema_matches_canonical():
     )
     assert bundled.read_text(encoding="utf-8") == canonical.read_text(encoding="utf-8"), (
         "Bundled schema is out of sync with the canonical schema. "
-        "Run `python docs/generate.py` to regenerate it."
+        "Run `python scripts/generate.py` to regenerate it."
     )
 
 

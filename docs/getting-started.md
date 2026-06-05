@@ -43,8 +43,9 @@ cd my-app
 
 `cwy init` creates the directory and lays down the starting `causeway.yaml`
 (with its `name` pre-filled from the directory) plus the agent rule files
-(`AGENTS.md` and `.cursorrules`) so your IDE agent picks up the Causeway rules
-automatically. It does **not** scaffold any application code — that stays a blank
+(`AGENTS.md`, `.cursorrules`, and `.github/copilot-instructions.md`) so your IDE
+agent picks up the Causeway rules automatically — all derived from `AGENTS.md`.
+It does **not** scaffold any application code — that stays a blank
 slate for you and the agent. Run it inside an existing empty directory (`cwy init`
 with no name) to scaffold in place; it never overwrites an existing manifest.
 
