@@ -313,3 +313,36 @@ two sources):
 python -m build --wheel ./validator
 python -c "import zipfile; print([n for n in zipfile.ZipFile('validator/dist/...whl').namelist() if 'rules.py' in n or 'data/' in n])"
 ```
+
+---
+
+## 15. The remote-execution git origin is a fixed proxy path — don't "fix" the move notice
+
+**Impact:** Medium — naively updating the origin URL breaks all push/fetch for
+the rest of the session.
+
+In Claude-Code-on-the-web sessions, `origin` is a managed proxy
+(`http://local_proxy@127.0.0.1:<port>/git/trydydd/Causeway`), not a real GitHub
+URL. Auth and routing happen *through that proxy*, which is authorized for exactly
+one path: `trydydd/Causeway` (capital C). Pushes succeed, but the remote prints a
+cosmetic notice — `remote: This repository moved` — because the repo was renamed
+to lowercase `causeway` on GitHub.
+
+**Do not "fix" the notice by changing the URL.** It is a trap:
+- Lowercasing the proxy path (`…/git/trydydd/causeway`) → `Proxy error: repository
+  not authorized` (HTTP 502).
+- Pointing origin at `https://github.com/trydydd/causeway.git` directly → loses the
+  proxy's credentials; nothing can push from the sandbox.
+
+The notice is harmless; leave origin alone. The real URL change (if wanted) is
+done on the owner's own machine, where credentials exist:
+`git remote set-url origin https://github.com/trydydd/causeway.git`.
+
+**Related operational note:** the container can reset between turns and rewind the
+*local* working tree to an earlier commit (seen this session: HEAD silently back
+at the previous commit, tree clean). Only **pushed** commits survive. Push
+promptly, then re-sync local with `git fetch origin <branch>` +
+`git reset --hard origin/<branch>`. A corollary write-glitch was also observed —
+some `Write`/`Edit` calls reported success but didn't persist (it's why this file
+and `handoff.md` lost their first D39 edits). Verify writes landed (`grep`/`git
+diff`) before committing.

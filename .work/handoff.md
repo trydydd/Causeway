@@ -3,9 +3,10 @@
 **Branch:** `claude/continuation-Ar2Qh`
 **Phase:** Phase 1 complete (merged, PR #1). Phase 2 started — the **local dev
 loop** is built and proven end-to-end.
-**Last work:** Added `cwy build`/`run`/`up`/`down` — the platform builds a
-container from the manifest and runs it on localhost (run-and-see). Decisions
-D33–D37 in PLANNING.md.
+**Last work:** (1) Refactored agent rule files to be *derived* at `cwy init` from
+one extensible registry instead of bundled (D39); the generator moved from
+`docs/generate.py` to `scripts/generate.py`. (2) Rewrote the human-facing
+`README.md` (status + quickstart + repo map). Decisions D33–D39 in PLANNING.md.
 
 ---
 
@@ -17,40 +18,38 @@ D33–D37 in PLANNING.md.
 2. `validator/` — `cwy validate [PATH] [--json]`, two-pass (denied then fixable),
    exit 0/1/2, five policy checks.
 3. `scaffold/` — `causeway.yaml`, `AGENTS.md`, generated `.cursorrules` +
-   `copilot-instructions.md`.
+   `.github/copilot-instructions.md` (both derived from `AGENTS.md` via `rules.py`).
 4. `scripts/generate.py` — idempotent generator (reference doc, repo rule files,
-   bundled schema + scaffold sources). Lives in `scripts/`, NOT `docs/` (no code
-   in a docs dir); imports `causeway.rules`, so CI installs the package first.
-**Phase 2 slice 1 — project scaffolding + the local dev loop (NEW):**
-
-4c. `causeway/rules.py` — the agent-rule registry (`RULE_FILES` + `render`): the
+   bundled schema + scaffold sources). In `scripts/`, NOT `docs/` (no code in a
+   docs dir); it imports `causeway.rules`, so CI installs the package first.
+5. `causeway/rules.py` — the agent-rule registry (`RULE_FILES` + `render`): the
    single `AGENTS.md`→tool-rule-file transform, shared by `cwy init` and the
-   generator (D39). Add a host = one entry.
+   generator (D39), so the repo's rule files and init's output can't drift.
+   Adding a host (Windsurf, Cline, …) is one `RuleFile` entry.
 
-4b. `cwy init [NAME]` (`scaffold.py`) — scaffolds a new project: `causeway.yaml`
-   (name pre-filled) + `AGENTS.md`, then **derives** `.cursorrules` +
-   `.github/copilot-instructions.md` from the bundled `AGENTS.md` via `rules.py`
-   — never app code (D37/D38/D39). Only the two sources are bundled into
-   `data/scaffold/`; rule files are derived, so they match the repo copies by
-   construction. Verified to ship in a built wheel. Removes the manual mkdir+copy
-   friction the first dogfood run surfaced.
+**Phase 2 slice 1 — project scaffolding + the local dev loop:**
 
-5. `validator/src/causeway/build/`
+6. `cwy init [NAME]` (`scaffold.py`) — scaffolds a new project: writes the two
+   bundled sources (`causeway.yaml` name-prefilled, `AGENTS.md`), then **derives**
+   `.cursorrules` + `.github/copilot-instructions.md` from the bundled `AGENTS.md`
+   via `rules.py`. Never app code (D37/D38/D39). Only the two sources are bundled
+   into `data/scaffold/`; rule files are derived. Verified to ship in a built
+   wheel. Removes the manual mkdir+copy friction the first dogfood run surfaced.
+7. `validator/src/causeway/build/`
    - `dockerfile.py` — pure `render_dockerfile(manifest, has_deps)` + `BASE_IMAGES`
      (1:1 with the runtime enum). Golden-tested, no runtime needed.
    - `runner.py` — `docker`/`nerdctl` wrapper: runtime detection, ephemeral build
      context, run with port + `.causeway.env` injection, health poll, teardown.
-6. `cli.py` — new subcommands `build` (+`--show-dockerfile`), `run`, `up`
-   (+`-d`), `down`. Build is gated on `cwy validate` first (same 0/1/2 contract).
-7. `tests/test_build.py` — 21 unit tests (renderer, gate, dry-run, runtime
-   detection, env parsing) + 2 opt-in `@integration` tests (real build+run+curl).
-   `tests/conftest.py` skips integration cleanly without a daemon.
-   `tests/build_fixtures/{py-health,node-health}/` — tiny health-only apps, used
-   only to smoke-test the loop (NOT user examples).
-8. `pytest.ini` — registers the `integration` marker; default `-m "not
-   integration"` so the suite is runtime-free by default.
-9. `docs/getting-started.md` — build-your-own-app-in-Cursor walkthrough (the
-   dogfood path).
+8. `cli.py` — subcommands `init`, `validate`, `build` (+`--show-dockerfile`),
+   `run`, `up` (+`-d`), `down`. Build is gated on `cwy validate` first (0/1/2).
+9. Tests: `test_build.py` (renderer/gate/dry-run/runtime/env + 2 opt-in
+   `@integration`), `test_init.py` (init behaviour + bundled-source drift guard),
+   `test_rules.py` (registry + transform), `test_validate.py`. `conftest.py` skips
+   integration cleanly without a daemon; `tests/build_fixtures/{py,node}-health/`
+   are smoke-test apps (NOT user examples). 63 unit tests green.
+10. `pytest.ini` — `integration` marker; default `-m "not integration"`.
+11. `docs/getting-started.md` — build-your-own-app walkthrough (dogfood path).
+12. `README.md` — human-facing front door: what works today, quickstart, repo map.
 
 **Proven:** both Python and Node fixtures build and run as real containers,
 health-check green, and serve HTTP 200 (`pytest -m integration`). The sandbox
@@ -60,17 +59,12 @@ proof used a registry mirror (see gotchas #12) — irrelevant on a real machine.
 
 ## State of decisions
 
-D1–D32 stand. Added:
+D1–D36 stand. Recent:
 
-- **D33** local dev loop is run-and-see, not deploy (no `cwy deploy`).
-- **D34** platform renders the Dockerfile into an ephemeral context;
-  `--show-dockerfile` for transparency.
-- **D35** POC golden base images = official `-slim` tags, 1:1 with the runtime enum.
-- **D36** local env via gitignored `.causeway.env`, injected at run time only.
 - **D37** a Causeway project is just a directory; app authoring is unconstrained.
-- **D38** `cwy init` scaffolds manifest + agent rules only (no app code);
-  removes first-touch friction.
-- **D39** tool rule files are derived at init from one extensible registry
+- **D38** `cwy init` scaffolds manifest + agent rules only (no app code); removes
+  first-touch friction.
+- **D39** tool rule files are *derived* at init from one extensible registry
   (`rules.py`), not bundled; generator moved out of `docs/` into `scripts/`.
 
 D12 note still applies (CLI is `cwy`).
@@ -100,9 +94,9 @@ pip install -e ./validator pytest check-jsonschema
 pytest tests/ -v                                    # unit suite (integration opt-out)
 check-jsonschema --check-metaschema schema/causeway-manifest.schema.json
 cwy validate scaffold/causeway.yaml --json
-python scripts/generate.py && git diff --exit-code
+python scripts/generate.py && git diff --exit-code  # generated files not stale
 
-# Verify scaffolding:
+# Verify scaffolding (init derives the rule files):
 cwy init /tmp/demo-app && cwy validate /tmp/demo-app/causeway.yaml
 
 # Verify the build loop (needs a running container runtime):
@@ -121,10 +115,16 @@ cwy down tests/build_fixtures/py-health
   `git status`, that's why (gotchas #11).
 - **Base-image map vs schema enum** must stay in lockstep —
   `test_base_image_map_covers_schema_runtimes` guards it.
-- **Bundled scaffold vs canonical scaffold** must stay in lockstep —
-  `test_bundled_scaffold_matches_canonical` + the generated-files CI job guard
-  it. Edit `scaffold/`, then `python scripts/generate.py`. `.cursorrules` is bundled
-  as `cursorrules` (no dot) for package_data; init writes the dot back (gotchas #14).
+- **Bundled scaffold SOURCES vs canonical scaffold** must stay in lockstep —
+  `test_bundled_scaffold_matches_canonical` + the generated-files CI job guard it.
+  Edit `scaffold/` (or the `rules.py` registry), then `python scripts/generate.py`.
+  Only `causeway.yaml` + `AGENTS.md` are bundled now; rule files are derived
+  (gotchas #14).
+- **This sandbox's git origin is a fixed proxy path** authorized only for
+  `trydydd/Causeway` (capital C). Do not "fix" the cosmetic `repository moved`
+  notice by changing the URL — lowercasing or pointing at github.com directly
+  breaks auth (gotchas #15). Push promptly and verify the remote: the container
+  can rewind the local tree between turns; only pushed commits survive.
 - Integration tests are **not** in CI by design (daemon + registry pulls →
   nondeterministic). They are the local/dogfood proof.
 
@@ -132,7 +132,7 @@ cwy down tests/build_fixtures/py-health
 
 ## Key files to read first
 
-1. `PLANNING.md` — decisions D1–D37. Read before changing anything.
+1. `PLANNING.md` — decisions D1–D39. Read before changing anything.
 2. `CLAUDE.md` — repo structure, rules, the local dev loop section.
-3. `.work/gotchas.md` — non-obvious traps (#11–#13 are from this slice).
+3. `.work/gotchas.md` — non-obvious traps (#11–#15).
 4. `docs/getting-started.md` — how a builder uses the paved road end-to-end.
