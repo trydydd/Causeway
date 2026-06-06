@@ -107,23 +107,25 @@ If you add them later, change the error-mapping logic.
 
 ---
 
-## 6. The bundled schema is a manual copy — no automated sync check
+## 6. The bundled schema used to be a manual copy — RESOLVED
 
-**Impact:** Medium — validator silently uses a stale schema after schema updates.
+**Status:** Fixed. Kept here because the underlying constraint still matters.
 
-`validator/src/causeway/data/causeway-manifest.schema.json` is a copy of
-`schema/causeway-manifest.schema.json`. There is no automated check that they
-match. If you update the canonical schema and forget to copy it, the validator
-will use the old schema without any error or warning.
+`validator/src/causeway/data/causeway-manifest.schema.json` must exist as a
+copy because the installed package loads it via `importlib.resources`
+(`schema.py`) and has no access to the repo's canonical `schema/` directory.
+Loading from the repo root in dev-mode was rejected: it would make the editable
+install behave differently from a PyPI install, masking exactly this bug.
 
-**Fix options for Phase 2:**
-- Add a test that compares the two files: `assert canonical == bundled`.
-- Or make `schema.py` load from the repo root in dev mode (editable install)
-  and from the bundled data in production.
+It is now a **generated artifact**: `scripts/generate.py` writes the canonical
+schema text verbatim to the bundled path. Two guards prevent drift:
+- `validate-generated-files` CI job (`python scripts/generate.py && git diff
+  --exit-code`) — fails the build if the committed copy is stale.
+- `test_bundled_schema_matches_canonical` in `tests/test_validate.py` — fast
+  local signal with a message pointing at `python scripts/generate.py`.
 
-Current workaround: the CI `validate-scaffold-manifest` job will catch some
-drift, but only for the scaffold manifest — it won't catch field additions or
-description changes.
+If you ever change `schema.py`'s loading strategy, re-check that the bundled
+copy is still what the *installed* package reads.
 
 ---
 
@@ -149,7 +151,7 @@ enough, but the root cause (YAML version) is non-obvious.
 
 The CI job runs:
 ```sh
-python docs/generate.py
+python scripts/generate.py
 git diff --exit-code
 ```
 
@@ -205,3 +207,142 @@ The false negative risk (missing a real secret) is higher than false positive
 risk for this use case — an agent that embeds a secret and doesn't get caught
 is worse than an agent that gets a false denied and asks the user. Err on the
 side of flagging.
+
+---
+
+## 11. `.gitignore`'s `build/` silently swallows the `causeway.build` package
+
+**Impact:** High — would ship a package that imports fine locally (editable
+install) but is missing from the repo, breaking a fresh clone and CI.
+
+The repo `.gitignore` has `build/` (the setuptools artifact convention), which
+is **unanchored** — it matches a directory named `build` *anywhere*, including
+the new source package `validator/src/causeway/build/`. After creating the
+package, `git status` showed `cli.py` modified but none of the new `build/*.py`
+files. They were invisible, not absent.
+
+**Fix:** re-include the source package with a negation after the broad ignore:
+
+```gitignore
+build/
+!validator/src/causeway/build/
+```
+
+A negation works here because no *parent* of the re-included dir is itself
+ignored. Diagnose this class of problem with `git check-ignore -v <path>` — it
+prints the exact `.gitignore` line and pattern doing the ignoring. Any future
+directory literally named `build`, `dist`, etc. that is real source will hit the
+same trap.
+
+---
+
+## 12. Docker Hub anonymous pull rate limits break builds on shared/CI IPs
+
+**Impact:** High for verification — base-image pulls fail with `503 Service
+Unavailable` or `You have reached your unauthenticated pull rate limit`, which
+looks like a network outage but is rate-limiting on the shared egress IP.
+
+In the build sandbox (and on busy CI runners) anonymous Docker Hub pulls of
+`python:3.x-slim` / `node:x-slim` get throttled. The 503 first appears mid-layer,
+so it masquerades as a flaky CDN. It is not the build loop failing — it is the
+registry refusing the pull.
+
+**Workaround for local/CI proof:** point the daemon at a pull-through mirror,
+which does not touch the user's Dockerfiles (they still reference
+`python:3.12-slim`):
+
+```sh
+dockerd --registry-mirror https://mirror.gcr.io      # Google's Docker Hub mirror
+```
+
+On a normal developer machine this does not arise — a single first pull caches
+locally. This is purely a shared-IP artifact; do **not** "fix" it in the build
+code. It is also exactly why integration tests are kept out of CI (see CLAUDE.md
+"CI jobs").
+
+---
+
+## 13. Shell-form `CMD` triggers buildkit's `JSONArgsRecommended` warning
+
+**Impact:** Low (cosmetic) but it is noise in the run-and-see output, which
+erodes trust — a warning the builder didn't cause and can't act on.
+
+The manifest `entrypoint` is a free-form shell command (`uvicorn main:app
+--host 0.0.0.0 --port 8080`, `npm start`), so the obvious render is shell-form
+`CMD uvicorn ...`. Buildkit warns that shell form doesn't forward OS signals
+(JSONArgsRecommended).
+
+**Fix:** render JSON exec form wrapping a shell, JSON-encoding the entrypoint so
+quotes/specials are safe:
+
+```python
+lines.append(f'CMD ["sh", "-c", {json.dumps(entrypoint)}]')
+```
+
+This silences the warning while keeping shell semantics (args, `npm start`, etc.)
+working verbatim. See `build/dockerfile.py`. Don't naively `.split()` the
+entrypoint into exec-form args — that breaks any entrypoint relying on the shell.
+
+---
+
+## 14. Rule files are derived at init, not bundled — and why (history)
+
+**Impact:** Medium — informs how `cwy init` produces `.cursorrules` /
+`.github/copilot-instructions.md`, and records a packaging trap to avoid.
+
+`AGENTS.md` is now natively read by the target hosts, so the per-tool rule files
+are compatibility shims (D39). They are **derived** at init from the bundled
+`AGENTS.md` via the single registry in `causeway/rules.py` — only the genuine
+sources (`causeway.yaml`, `AGENTS.md`) are bundled. Both `cwy init` and
+`scripts/generate.py` use `rules.RULE_FILES` + `rules.render`, so the repo's
+`scaffold/` copies and the files `cwy init` writes are identical by construction.
+
+**The trap this design avoids:** setuptools `package_data` globs (e.g.
+`data/scaffold/*`) do **not** match dotfiles, so an earlier version that *bundled*
+a `.cursorrules` had to ship it as `cursorrules` (no dot) and rename it at init —
+a hack that only existed because we bundled a derived file. Deriving instead of
+bundling removes the hack: init writes the dotfile name directly from the rendered
+string, and nothing dot-named ever needs to be package data.
+
+Still: **verify packaging end to end, not just the editable install** — an
+editable install reads from `src/`, masking missing-package-data bugs. Build a
+wheel and inspect it (confirm `rules.py` ships and `data/scaffold/` has only the
+two sources):
+
+```sh
+python -m build --wheel ./validator
+python -c "import zipfile; print([n for n in zipfile.ZipFile('validator/dist/...whl').namelist() if 'rules.py' in n or 'data/' in n])"
+```
+
+---
+
+## 15. The remote-execution git origin is a fixed proxy path — don't "fix" the move notice
+
+**Impact:** Medium — naively updating the origin URL breaks all push/fetch for
+the rest of the session.
+
+In Claude-Code-on-the-web sessions, `origin` is a managed proxy
+(`http://local_proxy@127.0.0.1:<port>/git/trydydd/Causeway`), not a real GitHub
+URL. Auth and routing happen *through that proxy*, which is authorized for exactly
+one path: `trydydd/Causeway` (capital C). Pushes succeed, but the remote prints a
+cosmetic notice — `remote: This repository moved` — because the repo was renamed
+to lowercase `causeway` on GitHub.
+
+**Do not "fix" the notice by changing the URL.** It is a trap:
+- Lowercasing the proxy path (`…/git/trydydd/causeway`) → `Proxy error: repository
+  not authorized` (HTTP 502).
+- Pointing origin at `https://github.com/trydydd/causeway.git` directly → loses the
+  proxy's credentials; nothing can push from the sandbox.
+
+The notice is harmless; leave origin alone. The real URL change (if wanted) is
+done on the owner's own machine, where credentials exist:
+`git remote set-url origin https://github.com/trydydd/causeway.git`.
+
+**Related operational note:** the container can reset between turns and rewind the
+*local* working tree to an earlier commit (seen this session: HEAD silently back
+at the previous commit, tree clean). Only **pushed** commits survive. Push
+promptly, then re-sync local with `git fetch origin <branch>` +
+`git reset --hard origin/<branch>`. A corollary write-glitch was also observed —
+some `Write`/`Edit` calls reported success but didn't persist (it's why this file
+and `handoff.md` lost their first D39 edits). Verify writes landed (`grep`/`git
+diff`) before committing.

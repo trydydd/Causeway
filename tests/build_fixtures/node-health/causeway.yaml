@@ -1,0 +1,16 @@
+# yaml-language-server: $schema=https://causeway.internal/schema/manifest/v1
+# Test fixture only — minimal health-only Node app to smoke-test the build loop
+# for the node runtime family. NOT an example for users. Stdlib http only (no
+# package.json) so the build needs no npm registry.
+apiVersion: causeway/v1
+name: node-health
+description: >
+  Minimal Node health-check fixture used by the build-loop tests. Serves a
+  health endpoint and a hello page. Accesses no external data.
+runtime: node22
+entrypoint: node server.js
+port: 3000
+healthEndpoint: /health
+tier: personal-team
+dataSources: []
+envVars: []

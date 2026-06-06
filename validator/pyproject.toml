@@ -20,4 +20,4 @@ cwy = "causeway.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-causeway = ["data/*.json"]
+causeway = ["data/*.json", "data/scaffold/*"]

@@ -4,6 +4,12 @@ __pycache__/
 *.egg
 dist/
 build/
+# build/ above ignores setuptools artifacts anywhere; re-include the source
+# package of the same name (causeway.build — the local build loop).
+!validator/src/causeway/build/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+
+# Local-only env values for `cwy up` (D36) — never commit these.
+.causeway.env

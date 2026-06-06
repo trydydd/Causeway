@@ -286,6 +286,25 @@ def test_denied_connection_string_in_description(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# Bundled schema sync — the validator loads a bundled copy of the canonical
+# schema (schema.py uses importlib.resources). It is generated verbatim by
+# scripts/generate.py so it cannot drift. CI's validate-generated-files job also
+# guards this; this test gives a fast, explicit local signal.
+# ---------------------------------------------------------------------------
+
+def test_bundled_schema_matches_canonical():
+    repo_root = Path(__file__).parent.parent
+    canonical = repo_root / "schema" / "causeway-manifest.schema.json"
+    bundled = (
+        repo_root / "validator" / "src" / "causeway" / "data" / "causeway-manifest.schema.json"
+    )
+    assert bundled.read_text(encoding="utf-8") == canonical.read_text(encoding="utf-8"), (
+        "Bundled schema is out of sync with the canonical schema. "
+        "Run `python scripts/generate.py` to regenerate it."
+    )
+
+
+# ---------------------------------------------------------------------------
 # JSON output structure contract
 # ---------------------------------------------------------------------------
 
